@@ -1,0 +1,8 @@
+{
+  "name": "gaplek",
+  "version": "1.0.0",
+  "description": "Game gaplek (domino) multiplayer untuk Windows dan Android via browser",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

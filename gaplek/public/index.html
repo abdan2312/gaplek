@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gaplek Online</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#1d1d1b;--card:#fff;--felt:#2f7d4f;--acc:#c0392b;--mut:#6b6b66;--ln:#d8d4ca}
+@media (prefers-color-scheme:dark){:root{--bg:#17181a;--fg:#eee;--card:#25272a;--felt:#1f5a38;--mut:#9a9a94;--ln:#3a3d40}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:14px}
+h1{font-size:22px;margin:0 0 4px}.mut{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:14px;margin:10px 0}
+input{width:100%;padding:11px;border:1px solid var(--ln);border-radius:10px;background:var(--bg);color:var(--fg);font:inherit;margin:4px 0 10px}
+button{font:inherit;padding:10px 16px;border-radius:10px;border:1px solid var(--ln);background:var(--card);color:var(--fg);cursor:pointer}
+button.p{background:var(--acc);color:#fff;border-color:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.seats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.seat{padding:8px 10px;border:2px solid var(--ln);border-radius:10px;background:var(--card);font-size:14px}
+.seat.on{border-color:var(--acc)}.seat b{display:block}
+.felt{background:var(--felt);border-radius:14px;padding:12px;min-height:120px;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start}
+.hand{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.t{display:inline-flex;align-items:center;background:#fbf8ef;border:1px solid #333;border-radius:7px;padding:2px;box-shadow:0 1px 2px #0005}
+.t u{width:1px;height:24px;background:#333;margin:0 2px}
+.h{display:grid;grid-template-columns:repeat(3,7px);grid-template-rows:repeat(3,7px);gap:2px;width:27px;height:27px;padding:1px}
+.h b{border-radius:50%}.h b.d{background:#222}
+.hand .t{cursor:pointer;transform:scale(1.2);margin:4px 6px}.hand .t.ok{outline:3px solid var(--acc)}.hand .t.sel{background:#ffe9a8}
+.hand .t:not(.ok){opacity:.45}
+.msg{font-weight:600;margin:8px 0}
+</style></head><body><main>
+<h1>🎲 Gaplek Online</h1>
+<div class="mut">Domino 4 pemain. Kursi kosong diisi bot.</div>
+<div id="home" class="card">
+ <label>Nama kamu<input id="nm" maxlength="12" placeholder="Contoh: Budi"></label>
+ <label>Kode meja (sama untuk semua pemain; kosongkan untuk main solo)<input id="cd" maxlength="20" placeholder="Contoh: meja1"></label>
+ <button class="p" id="bj">Main</button>
+ <p class="mut" id="note"></p>
+</div>
+<div id="game" hidden>
+ <div class="card"><div class="mut" id="info"></div><div class="msg" id="st"></div><div class="row" id="ctl"></div></div>
+ <div class="seats" id="seats"></div>
+ <p class="mut" id="log"></p>
+ <div class="felt" id="board"></div>
+ <p class="mut">Kartumu (garis merah = bisa dimainkan):</p>
+ <div class="hand" id="hand"></div>
+ <div class="row" id="ends"></div>
+</div>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const P=[[],[4],[0,8],[0,4,8],[0,2,6,8],[0,2,4,6,8],[0,2,3,5,6,8]];
+const half=n=>'<i class="h">'+[...Array(9)].map((_,k)=>'<b'+(P[n].includes(k)?' class="d"':'')+'></b>').join('')+'</i>';
+const tile=(t,x='')=>`<span class="t ${x}">${half(t[0])}<u></u>${half(t[1])}</span>`;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let ws,S=null,pend=-1;
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+  ws.onopen=()=>ws.send(JSON.stringify({t:'join',name:$('#nm').value.trim()||'Pemain',code:$('#cd').value}));
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.t==='err'){$('#note').textContent=m.msg;$('#home').hidden=false;$('#game').hidden=true;return}
+    S=m;pend=-1;$('#home').hidden=true;$('#game').hidden=false;render()};
+  ws.onclose=()=>{if(S){$('#st').textContent='Koneksi terputus. Muat ulang halaman.'}else $('#note').textContent='Tidak bisa terhubung ke server.'};
+}
+function render(){
+  $('#info').textContent='Meja: '+S.code+(S.me===S.host?' (kamu tuan rumah)':'');
+  const ctl=$('#ctl');ctl.innerHTML='';
+  if(S.phase==='lobby'){$('#st').textContent=S.me===S.host?'Tunggu teman bergabung, lalu mulai. Kursi kosong dimainkan bot.':'Menunggu tuan rumah memulai...';
+    if(S.me===S.host)ctl.innerHTML='<button class="p" id="go">Mulai</button>'}
+  else if(S.phase==='over'){$('#st').textContent='🏆 '+S.seats[S.winner].name+' menang ('+S.why+')';
+    if(S.me===S.host)ctl.innerHTML='<button class="p" id="go">Main lagi</button>'}
+  else $('#st').textContent=S.turn===S.me?'Giliranmu':'Giliran '+S.seats[S.turn].name;
+  const go=$('#go');if(go)go.onclick=()=>ws.send(JSON.stringify({t:'start'}));
+  $('#seats').innerHTML=S.seats.map((s,i)=>`<div class="seat ${S.phase==='play'&&S.turn===i?'on':''}"><b>${esc(s.name)}${i===S.me?' (kamu)':''}${s.bot?' 🤖':''}</b>${s.n} kartu</div>`).join('');
+  $('#log').textContent=S.log||'';
+  $('#board').innerHTML=S.board.map(t=>tile(t)).join('');
+  $('#hand').innerHTML=S.hand.map((t,i)=>tile(t,(S.moves.some(x=>x.i===i)?'ok ':''))).join('');
+  [...$('#hand').children].forEach((el,i)=>el.onclick=()=>pick(i));
+  $('#ends').innerHTML='';
+}
+function pick(i){
+  const o=S.moves.filter(x=>x.i===i);if(!o.length)return;
+  if(o.length===1)return send(i,o[0].e);
+  pend=i;[...$('#hand').children].forEach((el,k)=>el.classList.toggle('sel',k===i));
+  $('#ends').innerHTML='<button id="eL">◀ Kiri</button><button id="eR">Kanan ▶</button>';
+  $('#eL').onclick=()=>send(i,'L');$('#eR').onclick=()=>send(i,'R');
+}
+function send(i,e){ws.send(JSON.stringify({t:'play',i,e}))}
+$('#bj').onclick=connect;
+</script></body></html>
